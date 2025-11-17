@@ -9,8 +9,15 @@ from flask import Flask, Response, jsonify
 from flask_cors import CORS
 import time
 
+from cryptography.fernet import Fernet
+# --- Encryption Setup ---
+with open("secret.key", "rb") as key_file:
+    encryption_key = key_file.read()
+fernet = Fernet(encryption_key)
+
+
 # --- ESP32-CAM URL ---
-ESP32_CAM_URL = "http://10.244.205.198"
+ESP32_CAM_URL = "http://172.20.10.14"
 import cv2
 import threading
 import time
@@ -106,7 +113,7 @@ class CameraStream:
             except Exception as e:
                 print(f"[ERROR] Error capturing frame: {e}")
                 time.sleep(0.1)
-
+        
     def run_detection(self):
         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
         while self.running:
@@ -223,8 +230,8 @@ for filename in os.listdir(faces_dir):
             encoding = encodings[0]
             # Extract name and roll from filename (format: name,roll.png)
             name_roll = os.path.splitext(filename)[0]
-            if ',' in name_roll:
-                name, roll = name_roll.split(',', 1)
+            if '_' in name_roll:
+                name, roll = name_roll.split('_', 1)
                 name = name.strip()
                 roll = roll.strip()
             else:
@@ -244,6 +251,7 @@ CORS(app)
 @app.route('/health')
 def health():
     return jsonify({"status": "ok"}), 200
+
 
 @app.route('/detect_face', methods=['GET'])
 def detect_face():
@@ -280,53 +288,49 @@ def detect_face():
 
 
 # --- Helper Function to log attendance ---
-def log_attendance(name,roll):
+def log_attendance(name, roll):
     try:
         print(f"[INFO] Logging attendance for: {name}")
         now = datetime.now()
         current_date = now.strftime("%Y-%m-%d")
-        
         csv_file = f"{current_date}.csv"
-        
+
         print(f"[DEBUG] CSV file path: {csv_file}")
         print(f"[DEBUG] Current working directory: {os.getcwd()}")
 
-        # Create file with header if not exists
-        if not os.path.exists(csv_file):
-            print(f"[DEBUG] Creating new CSV file: {csv_file}")
-            with open(csv_file, "w", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerow(["Name", "Roll", "Time"])
-                print(f"[DEBUG] CSV header written successfully")
-
-        # Read existing names
+        # Read existing decrypted entries (if any)
         existing_names = []
-        try:
-            with open(csv_file, "r") as f:
-                reader = csv.reader(f)
-                next(reader, None)  # skip header
-                existing_names = [row[0] for row in reader if row]  # Filter out empty rows
-                print(f"[DEBUG] Existing names in CSV: {existing_names}")
-        except Exception as e:
-            print(f"[ERROR] Error reading CSV file: {e}")
-            return False
+        if os.path.exists(csv_file):
+            with open(csv_file, "rb") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    if line.startswith(b"gAAAAA"):
+                        try:
+                            decrypted = fernet.decrypt(line).decode()
+                            existing_names.append(decrypted.split(",")[0])
+                        except Exception:
+                            continue
 
-        # Append only if not already present
-        if name not in existing_names:
-            try:
-                with open(csv_file, "a", newline="") as f:
-                    writer = csv.writer(f)
-                    current_time = now.strftime("%H:%M:%S")
-                    writer.writerow([name,roll, current_time])
-                    print(f"[INFO] Successfully logged attendance for {name} at {current_time}")
-                return True
-            except Exception as e:
-                print(f"[ERROR] Error writing to CSV file: {e}")
-                return False
-        else:
+        print(f"[DEBUG] Existing names in CSV: {existing_names}")
+
+        # If already present, skip
+        if name in existing_names:
             print(f"[INFO] {name} already has attendance marked for today")
             return False
-            
+
+        # Otherwise, append new encrypted entry
+        current_time = now.strftime("%H:%M:%S")
+        new_line = f"{name},{roll},{current_time}".encode()
+        encrypted_line = fernet.encrypt(new_line)
+
+        with open(csv_file, "ab") as f:
+            f.write(encrypted_line + b"\n")
+
+        print(f"[INFO] Successfully logged encrypted attendance for {name}")
+        return True
+
     except Exception as e:
         print(f"[ERROR] Unexpected error in log_attendance: {e}")
         import traceback
@@ -447,15 +451,29 @@ def mark_attendance():
 def get_attendance():
     current_date = datetime.now().strftime("%Y-%m-%d")
     csv_file = f"{current_date}.csv"
+
     if not os.path.exists(csv_file):
         return jsonify([])
-    
+
     rows = []
-    with open(csv_file, "r") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            rows.append(row)
+    with open(csv_file, "rb") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                # Only decrypt if it looks like Fernet token (always starts with b'gAAAAA')
+                if not line.startswith(b"gAAAAA"):
+                    continue  # skip header or plaintext
+                decrypted = fernet.decrypt(line).decode()
+                name, roll, time = decrypted.split(",")
+                rows.append({"Name": name, "Roll": roll, "Time": time})
+            except Exception as e:
+                print(f"[ERROR] Failed to decrypt a line: {e}")
+                continue
+
     return jsonify(rows)
+
 
 @app.route('/test_camera')
 def test_camera():
@@ -500,9 +518,83 @@ def test_camera():
             "status": "error",
             "message": f"Camera test failed: {str(e)}"
         })
+@app.route('/')
+def home():
+    return """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Flask HTTPS Active</title>
+        <style>
+            body {
+                background: linear-gradient(135deg, #1e3c72, #2a5298);
+                color: white;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                margin: 0;
+                text-align: center;
+            }
+            h1 {
+                font-size: 2.5em;
+                margin-bottom: 0.5em;
+                text-shadow: 1px 1px 5px rgba(0,0,0,0.4);
+            }
+            p {
+                font-size: 1.2em;
+                color: #e0e0e0;
+                max-width: 600px;
+                line-height: 1.5em;
+            }
+            .status {
+                margin-top: 1.5em;
+                padding: 10px 20px;
+                background: #4CAF50;
+                color: white;
+                border-radius: 8px;
+                font-weight: bold;
+                box-shadow: 0 0 10px rgba(0,0,0,0.2);
+                animation: pulse 1.5s infinite;
+            }
+            @keyframes pulse {
+                0% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.05); opacity: 0.9; }
+                100% { transform: scale(1); opacity: 1; }
+            }
+            footer {
+                position: absolute;
+                bottom: 20px;
+                font-size: 0.9em;
+                color: #cccccc;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>🔒 Secure Flask Server Running</h1>
+        <p>
+            Your Flask backend is successfully running with <strong>HTTPS encryption</strong> enabled.<br/>
+            All data between the client and server is securely transmitted.
+        </p>
+        <div class="status">HTTPS Port 5000 Active ✅</div>
+        <footer>© 2025 Secure Flask | TLS/SSL Enabled</footer>
+    </body>
+    </html>
+    """
 
 
-# --- Main ---
+
 if __name__ == '__main__':
-    print("[INFO] Starting Flask server...")
-    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
+    print("[INFO] Starting Flask server securely with HTTPS...")
+    app.run(
+        host='0.0.0.0',
+        port=5000,
+        debug=True,
+        ssl_context=('cert.pem', 'key.pem'),
+        threaded=True
+    )
+

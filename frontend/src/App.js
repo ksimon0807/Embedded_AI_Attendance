@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 
 // --- Configuration ---
 // IMPORTANT: Make sure this URL matches where your Python backend is running.
-const BACKEND_URL = "http://127.0.0.1:5000";
+const BACKEND_URL = "https://127.0.0.1:5000";
 const HEALTH_CHECK_INTERVAL = 5000; // Check backend status every 5 seconds.
 
 // --- Reusable UI Components ---

@@ -1,0 +1,65 @@
+# ----------------------------
+# BASIC SYSTEM FILES
+# ----------------------------
+*.log
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db
+
+# ----------------------------
+# PYTHON FILES
+# ----------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+venv/
+ENV/
+.venv/
+
+# ----------------------------
+# NODE + VITE FRONTEND
+# ----------------------------
+node_modules/
+dist/
+.build/
+.cache/
+npm-debug.log
+yarn-error.log
+
+# ----------------------------
+# SENSITIVE / SECURITY FILES
+# ----------------------------
+# All key files
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+*.der
+
+# Secret files
+secret.key
+private.key
+
+# ----------------------------
+# BACKEND APP SPECIFIC
+# ----------------------------
+backend/*.pem
+backend/*.key
+backend/*.crt
+
+# Ignore CSV data files
+*.csv
+*.tsv
+*.xlsx
+
+# If faces folder contains sensitive images
+backend/faces/
+
+# ----------------------------
+# GIT INTERNAL
+# ----------------------------
+!.gitignore
