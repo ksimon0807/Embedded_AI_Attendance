@@ -203,15 +203,6 @@ def get_latest_frame(timeout_seconds: float = 2.0):
             return frame
         time.sleep(0.05)
     return None
-# --- Known Faces ---
-# shreyansh_image = face_recognition.load_image_file("faces/shreyansh.png")
-# shreyansh_encoding = face_recognition.face_encodings(shreyansh_image)[0]
-
-# shivam_image = face_recognition.load_image_file("faces/shivam.png")
-# shivam_encoding = face_recognition.face_encodings(shivam_image)[0]
-
-# known_face_encodings = [shreyansh_encoding, shivam_encoding]
-# known_face_names = ["shreyansh", "shivam"]
 
 
 faces_dir = "faces"
@@ -228,7 +219,7 @@ for filename in os.listdir(faces_dir):
 
         if len(encodings) > 0:
             encoding = encodings[0]
-            # Extract name and roll from filename (format: name,roll.png)
+            # Extract name and roll from filename
             name_roll = os.path.splitext(filename)[0]
             if '_' in name_roll:
                 name, roll = name_roll.split('_', 1)
@@ -298,7 +289,7 @@ def log_attendance(name, roll):
         print(f"[DEBUG] CSV file path: {csv_file}")
         print(f"[DEBUG] Current working directory: {os.getcwd()}")
 
-        # Read existing decrypted entries (if any)
+        # Read existing decrypted entries
         existing_names = []
         if os.path.exists(csv_file):
             with open(csv_file, "rb") as f:
@@ -362,14 +353,12 @@ def mark_attendance():
         
         print(f"[DEBUG] Frame captured successfully, shape: {frame.shape}")
         
-        # Convert to RGB (use full resolution like detect_face function)
+        # Convert to RGB 
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
-        # Try both HOG and CNN models for better face detection (same as detect_face)
         face_locations = face_recognition.face_locations(rgb_frame, model="hog")
         print(f"[DEBUG] HOG model found {len(face_locations)} faces")
         
-        # If no faces found with HOG, try CNN model (more accurate but slower)
         if len(face_locations) == 0:
             print("[DEBUG] No faces found with HOG, trying CNN model...")
             face_locations = face_recognition.face_locations(rgb_frame, model="cnn")
@@ -462,9 +451,8 @@ def get_attendance():
             if not line:
                 continue
             try:
-                # Only decrypt if it looks like Fernet token (always starts with b'gAAAAA')
                 if not line.startswith(b"gAAAAA"):
-                    continue  # skip header or plaintext
+                    continue 
                 decrypted = fernet.decrypt(line).decode()
                 name, roll, time = decrypted.split(",")
                 rows.append({"Name": name, "Roll": roll, "Time": time})
@@ -575,12 +563,12 @@ def home():
         </style>
     </head>
     <body>
-        <h1>🔒 Secure Flask Server Running</h1>
+        <h1> Secure Flask Server Running</h1>
         <p>
             Your Flask backend is successfully running with <strong>HTTPS encryption</strong> enabled.<br/>
             All data between the client and server is securely transmitted.
         </p>
-        <div class="status">HTTPS Port 5000 Active ✅</div>
+        <div class="status">HTTPS Port 5000 Active </div>
         <footer>© 2025 Secure Flask | TLS/SSL Enabled</footer>
     </body>
     </html>
